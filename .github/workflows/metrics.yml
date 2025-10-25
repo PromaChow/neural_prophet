@@ -1,94 +1,156 @@
 name: Measure Model Performance
 on:
   push:
-    paths: # Run only when files under neuralprophet/ are modified
-      - neuralprophet/**
-    branches: # Run only on these branches
-      - main
-      - develop
-  pull_request: # Run on pull requests
     branches:
       - main
-      - develop
-  workflow_dispatch:
 
 jobs:
   metrics:
-    runs-on: ubuntu-latest # container: docker://ghcr.io/iterative/cml:0-dvc2-base1
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - name: Checkout
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      
       - name: Install Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      
+          python-version: '3.12'
       - name: Setup NodeJS (for CML)
-        uses: actions/setup-node@v3 # For CML
+        uses: actions/setup-node@v3
         with:
           node-version: '20'
-      
       - name: Setup CML
         uses: iterative/setup-cml@v1
-      
       - name: Install Poetry
         uses: snok/install-poetry@v1
-      
       - name: Install Dependencies
         run: poetry install --no-interaction --no-root --with=pytest,metrics --without=dev,docs,linters
-      
+      - id: measurement-7
+        name: Record Measurement After Install Dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install Dependencies
+          task: get-measurement
       - name: Install Project
         run: poetry install --no-interaction --with=pytest,metrics --without=dev,docs,linters
-      
+      - id: measurement-9
+        name: Record Measurement After Install Project
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install Project
+          task: get-measurement
       - name: Train model
         run: poetry run pytest tests/test_model_performance.py -n 1 --durations=0
-      
+      - id: measurement-11
+        name: Record Measurement After Train model
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Train model
+          task: get-measurement
       - name: Download metrics from main
         uses: dawidd6/action-download-artifact@v2
         with:
-          repo: ourownstory/neural_prophet
           branch: main
+          if_no_artifact_found: warn
           name: metrics
           path: tests/metrics-main/
-          if_no_artifact_found: warn
-      
+          repo: ourownstory/neural_prophet
       - name: Open Benchmark Report
         run: echo "## Model Benchmark" >> report.md
-      
+      - id: measurement-14
+        name: Record Measurement After Open Benchmark Report
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Open Benchmark Report
+          task: get-measurement
       - name: Write Benchmark Report
         run: poetry run python tests/metrics/compareMetrics.py >> report.md
-      
-      - name: Publish Report with CML
-        env:
+      - id: measurement-16
+        name: Record Measurement After Write Benchmark Report
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Write Benchmark Report
+          task: get-measurement
+      - env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "<details><summary>Model training plots</summary>" >> report.md
+        name: Publish Report with CML
+        run: 'echo "<details><summary>Model training plots</summary>" >> report.md
+
           echo "" >> report.md
+
           echo "## Model Training" >> report.md
+
           echo "" >> report.md
+
           echo "### PeytonManning" >> report.md
+
           cml asset publish tests/metrics/PeytonManning.svg --md >> report.md
+
           echo "" >> report.md
+
           echo "### YosemiteTemps" >> report.md
+
           cml asset publish tests/metrics/YosemiteTemps.svg --md >> report.md
+
           echo "" >> report.md
+
           echo "### AirPassengers" >> report.md
+
           cml asset publish tests/metrics/AirPassengers.svg --md >> report.md
+
           echo "" >> report.md
+
           echo "### EnergyPriceDaily" >> report.md
+
           cml asset publish tests/metrics/EnergyPriceDaily.svg --md >> report.md
+
           echo "" >> report.md
+
           echo "</details>" >> report.md
+
           echo "" >> report.md
-          cml comment update --target=pr report.md # Post reports as comments in GitHub PRs
-          cml check create --title=ModelReport report.md # update status of check in PR
-      
-      - name: Upload metrics if on main
-        if: github.ref == 'refs/heads/main'
+
+          cml comment update --target=pr report.md # Post reports as comments in GitHub
+          PRs
+
+          cml check create --title=ModelReport report.md # update status of check
+          in PR
+
+          '
+      - id: measurement-18
+        name: Record Measurement After Publish Report with CML
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Publish Report with CML
+          task: get-measurement
+      - if: github.ref == 'refs/heads/main'
+        name: Upload metrics if on main
         uses: actions/upload-artifact@v3
         with:
           name: metrics
           path: tests/metrics/
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json

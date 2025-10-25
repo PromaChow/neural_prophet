@@ -3,31 +3,57 @@ on:
   push:
     branches:
       - main
-      - website
-  pull_request:
-    branches:
-      - main
-      - website
 
 defaults:
   run:
     shell: bash
-
 jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.12"
+          python-version: '3.12'
       - name: Install Poetry
         uses: abatilo/actions-poetry@v2
       - name: Setup Pandoc
         uses: r-lib/actions/setup-pandoc@v2
       - name: Setup Requirements
         run: poetry install  --no-interaction --with=docs --without=dev,pytest,metrics,linters
+      - id: measurement-6
+        name: Record Measurement After Setup Requirements
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Setup Requirements
+          task: get-measurement
       - name: Build with Sphinx
         run: poetry run sphinx-build docs/source _site
+      - id: measurement-8
+        name: Record Measurement After Build with Sphinx
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Build with Sphinx
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
